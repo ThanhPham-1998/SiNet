@@ -108,7 +108,7 @@ class S2Block(nn.Module):
                                                         padding=padding
                                                     )
         self.up_sampling = nn.UpsamplingBilinear2d(scale_factor=reduce_ratio)
-        self.norn = nn.BatchNorm2d(num_features=out_channels)
+        self.norm = nn.BatchNorm2d(num_features=out_channels)
 
     def forward(self, x):
         x = self.avgpooling2d(x)
@@ -116,7 +116,7 @@ class S2Block(nn.Module):
         x = self.separabble_conv(x)
         print(x.shape)
         x = self.up_sampling(x)
-        x = self.norn(x)
+        x = self.norm(x)
         return x
 
 """
@@ -288,8 +288,8 @@ class Decoder(nn.Module):
     def forward(self, x, x_5_):
         x_1 = self.up_sampling_1(x)
         x_2 = self.norm_1(x_1)
-        x_3 = self.softmax(x_2)
-        blocking_map = 1 - x_3 
+        x_3 = torch.max(self.softmax(x_2), dim=1)[0]
+        blocking_map = (1 - x_3).unsqueeze(1).expand(x_2.shape)
         x_pointwise = self.pointwise(x_5_)
         x_4 = x_pointwise * blocking_map
         x_5 = self.relu(x_4)
@@ -303,6 +303,7 @@ class Decoder(nn.Module):
         x_13 = self.norm_3(x_12)
         x_14 = self.relu(x_13)
         return self.softmax(x_14)
+
 
 class SiNetModel(nn.Module):
 

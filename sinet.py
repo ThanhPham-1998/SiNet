@@ -45,6 +45,7 @@ class ChannelShuffle(nn.Module):
         g = self.groups
         return x.view(N,g,C//g,H,W).permute(0,2,1,3,4).reshape(N,C,H,W)
 
+
 """
     - Deepthwise 
         + in_channels: number channel of features before foward into module
@@ -112,9 +113,7 @@ class S2Block(nn.Module):
 
     def forward(self, x):
         x = self.avgpooling2d(x)
-        print(x.shape)
         x = self.separabble_conv(x)
-        print(x.shape)
         x = self.up_sampling(x)
         x = self.norm(x)
         return x
@@ -140,10 +139,9 @@ class S2Module(nn.Module):
 
     def forward(self, x):
         y = self.channel_shuffle(x)
-        y = self.pointwise(y)
+        y = self.pointwise(x)
         y_1 = self.s2block_1(y)
         y_2 = self.s2block_2(y)
-        print(x.shape, y.shape)
         y = torch.cat((y_1, y_2), 1)
         y =  x + y
         return self.prelu(y)
@@ -162,7 +160,6 @@ class S2Module(nn.Module):
 class SqueezeBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride):
         super().__init__()
-        self.out_channels = out_channels
         self.tr = ConvBlock(in_channels=in_channels, out_channels=out_channels, 
                             kernel_size=kernel_size, stride=stride)
         self.down = nn.Conv2d(in_channels=out_channels, out_channels= out_channels // 2, kernel_size=1, stride=1)
@@ -210,7 +207,7 @@ class DeepthwiseConvSEBlock(nn.Module):
 #                                                              #
 # ##############################################################
 
-from torchsummary import summary
+from .model import Model
 
 class Encoder(nn.Module):
 
@@ -245,6 +242,7 @@ class Encoder(nn.Module):
                                     kernel_size_1=3, padding_1=1, kernel_size_2=5, padding_2=1)
         self.s2_module_10 = S2Module(n_groups=4, reduce_ratio=2, in_channels_conv=96, kernel_per_layer=3, 
                                     kernel_size_1=3, padding_1=1, kernel_size_2=3, padding_2=1)
+        # self.out = Pointwise(in_channels=144, out_channels=num_classes)
         self.out = DeepthwiseSeparableConv(in_channels=144, out_channels=num_classes, kernel_per_layer=1, 
                                     kernel_size=3, padding=0)
     
@@ -292,8 +290,7 @@ class Decoder(nn.Module):
         blocking_map = (1 - x_3).unsqueeze(1).expand(x_2.shape)
         x_pointwise = self.pointwise(x_5_)
         x_4 = x_pointwise * blocking_map
-        x_5 = self.relu(x_4)
-        x_6 = x_4 + x_5 
+        x_6 = x_4 + x_2 
         x_7 = self.relu(x_6)
         x_8 = self.up_sampling_2(x_7)
         x_9 = self.norm_2(x_8)
@@ -303,9 +300,8 @@ class Decoder(nn.Module):
         x_13 = self.norm_3(x_12)
         x_14 = self.relu(x_13)
         return self.softmax(x_14)
-
-
-class SiNetModel(nn.Module):
+        
+class SiNetModel(Model):
 
     def __init__(self, num_classes):
         super().__init__()
@@ -315,6 +311,5 @@ class SiNetModel(nn.Module):
     def forward(self, x):
         features, x_5 = self.Encoder(x)
         return self.Decoder(features, x_5)
-
 
 
